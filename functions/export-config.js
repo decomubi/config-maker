@@ -39,7 +39,7 @@ exports.handler = async (event) => {
       code: game.code,
       description: game.description,
       config: game.config,
-      assets: assetRes.rows.map(a => ({
+      assets: assetRes.rows.map((a) => ({
         id: a.id,
         kind: a.kind,
         label: a.label,
@@ -54,7 +54,7 @@ exports.handler = async (event) => {
       statusCode: 200,
       headers: {
         'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*' // if his engine loads this from other domains
+        'Access-Control-Allow-Origin': '*'
       },
       body: JSON.stringify(exportPayload, null, 2)
     };
@@ -62,6 +62,7 @@ exports.handler = async (event) => {
     console.error('export-config error', err);
     return {
       statusCode: 500,
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ error: 'Server error', details: err.message })
     };
   }
