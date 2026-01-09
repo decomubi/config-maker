@@ -222,7 +222,7 @@
       statusEl.textContent = 'Uploading to Cloudinary...';
 
       try {
-        const url = `https://api.cloudinary.com/v1_1/${dqhsuzpv0}/image/upload`;
+        const url = `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`;
         const formData = new FormData();
         formData.append('file', file);
         formData.append('upload_preset', UPLOAD_PRESET);
