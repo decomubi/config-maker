@@ -1,1 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Casino Config Maker – Admin</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 0; padding: 1.5rem; background:#f5f5f5;}
+    h1 { margin-bottom: 1rem; }
+    .layout { display:flex; gap:2rem; align-items:flex-start; }
+    .panel { background:white; padding:1rem 1.5rem; border-radius:8px; box-shadow:0 1px 4px rgba(0,0,0,.08); flex:1; }
+    label { display:block; margin-top:0.5rem; font-size:0.9rem; }
+    input, textarea, select {
+      width:100%; padding:0.4rem 0.5rem; margin-top:0.2rem;
+      border:1px solid #ccc; border-radius:4px; font-size:0.9rem;
+    }
+    button { margin-top:0.75rem; padding:0.4rem 0.8rem; border-radius:4px; border:1px solid #2563eb; background:#2563eb; color:white; cursor:pointer; }
+    button.secondary { background:white; color:#2563eb; }
+    ul { list-style:none; padding:0; }
+    li { padding:0.3rem 0; cursor:pointer; }
+    li.active { font-weight:bold; color:#2563eb; }
+    .small { font-size:0.8rem; color:#666; }
+    .assets-list { margin-top:0.5rem; font-size:0.85rem; max-height:200px; overflow:auto; }
+    .row { display:flex; gap:0.5rem; }
+    .row > div { flex:1; }
+  </style>
+</head>
+<body>
+  <h1>Casino Config Maker – Admin</h1>
 
+  <div class="layout">
+    <!-- Games list -->
+    <div class="panel" style="max-width:260px;">
+      <h3>Games</h3>
+      <ul id="games-list"></ul>
+      <button onclick="startNewGame()">+ New Game</button>
+    </div>
+
+    <!-- Game editor -->
+    <div class="panel">
+      <h3 id="editor-title">New Game</h3>
+      <input type="hidden" id="game-id" />
+
+      <label>
+        Game name
+        <input id="game-name" />
+      </label>
+      <label>
+        Game code (unique, used by engine)
+        <input id="game-code" />
+      </label>
+      <label>
+        Description
+        <textarea id="game-description" rows="3"></textarea>
+      </label>
+
+      <h4>Basic config (JSON)</h4>
+      <p class="small">
+        For Phase 1, we store parameters as JSON. Later we can map directly from your Excel fields.
+      </p>
+      <textarea id="game-config" rows="8">{}</textarea>
+
+      <button onclick="saveGame()">Save game</button>
+      <span id="save-status" class="small"></span>
+
+      <hr />
+
+      <h3>Assets (images)</h3>
+      <div class="row">
+        <div>
+          <label>
+            Asset label (e.g. "wheel-bg", "symbol-7")
+            <input id="asset-label" />
+          </label>
+        </div>
+        <div>
+          <label>
+            Choose image
+            <input type="file" id="asset-file" accept="image/*" />
+          </label>
+        </div>
+      </div>
+      <button onclick="uploadAsset()">Upload & attach</button>
+      <div id="asset-status" class="small"></div>
+
+      <div class="assets-list" id="assets-list"></div>
+
+      <hr />
+      <h3>Export</h3>
+      <button class="secondary" onclick="openExport()">Open JSON export for this game</button>
+    </div>
+  </div>
+
+  <script>
+    // === CONFIG: set these to your Cloudinary details ===
+    const CLOUD_NAME = 'YOUR_CLOUD_NAME';
+    const UPLOAD_PRESET = 'casino_game_assets';
+
+    let currentGameId = null;
+    let gamesCache = [];
+
+    async function fetchGames() {
+      const res = await fetch('/.netlify/functions/games');
+      const data = await res.json();
+      gamesCache = data;
+      renderGamesList();
+    }
+
+    function renderGamesList() {
+      const list = document.getElementById('games-list');
+      list.innerHTML = '';
+      gamesCache.forEach(g => {
+        const li = document.createElement('li');
+        li.textContent = g.name + ' (' + g.code + ')';
+        li.onclick = () => loadGame(g.id);
+        if (g.id === currentGameId) li.classList.add('active');
+        list.appendChild(li);
+      });
+    }
+
+    async function loadGame(id) {
+      const res = await fetch('/.netlify/functions/games?id=' + encodeURIComponent(id));
+      const { game, assets } = await res.json();
+      currentGameId = game.id;
+
+      document.getElementById('editor-title').textContent = 'Edit Game';
+      document.getElementById('game-id').value = game.id;
+      document.getElementById('game-name').value = game.name;
+      document.getElementById('game-code').value = game.code;
+      document.getElementById('game-description').value = game.description || '';
+      document.getElementById('game-config').value = JSON.stringify(game.config || {}, null, 2);
+
+      renderAssets(assets);
+      renderGamesList();
+      document.getElementById('save-status').textContent = '';
+    }
+
+    function startNewGame() {
+      currentGameId = null;
+      document.getElementById('editor-title').textContent = 'New Game';
+      document.getElementById('game-id').value = '';
+      document.getElementById('game-name').value = '';
+      document.getElementById('game-code').value = '';
+      document.getElementById('game-description').value = '';
+      document.getElementById('game-config').value = '{}';
+      document.getElementById('assets-list').innerHTML = '';
+      document.getElementById('save-status').textContent = '';
+      renderGamesList();
+    }
+
+    async function saveGame() {
+      const id = document.getElementById('game-id').value || null;
+      const name = document.getElementById('game-name').value.trim();
+      const code = document.getElementById('game-code').value.trim();
+      const description = document.getElementById('game-description').value.trim();
+      let configText = document.getElementById('game-config').value;
+      let config;
+      try {
+        config = JSON.parse(configText || '{}');
+      } catch (e) {
+        alert('Config JSON is invalid: ' + e.message);
+        return;
+      }
+      if (!name || !code) {
+        alert('Name and code are required.');
+        return;
+      }
+
+      const res = await fetch('/.netlify/functions/games', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, name, code, description, config })
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        alert('Save failed: ' + text);
+        return;
+      }
+
+      const saved = await res.json();
+      currentGameId = saved.id;
+      document.getElementById('game-id').value = saved.id;
+      document.getElementById('save-status').textContent = 'Saved at ' + new Date().toLocaleTimeString();
+
+      await fetchGames();
+      await loadGame(saved.id);
+    }
+
+    function renderAssets(assets) {
+      const div = document.getElementById('assets-list');
+      if (!assets || assets.length === 0) {
+        div.textContent = 'No assets yet.';
+        return;
+      }
+      div.innerHTML = '';
+      assets.forEach(a => {
+        const item = document.createElement('div');
+        item.innerHTML = `
+          <strong>${a.label}</strong> (${a.format || 'img'} ${a.width || '?'}x${a.height || '?'})<br/>
+          <a href="${a.url}" target="_blank">${a.url}</a>
+        `;
+        div.appendChild(item);
+      });
+    }
+
+    async function uploadAsset() {
+      const gameId = document.getElementById('game-id').value;
+      if (!gameId) {
+        alert('Save the game first before uploading assets.');
+        return;
+      }
+      const label = document.getElementById('asset-label').value.trim();
+      const fileInput = document.getElementById('asset-file');
+      const file = fileInput.files[0];
+
+      if (!label || !file) {
+        alert('Please provide a label and choose a file.');
+        return;
+      }
+
+      const statusEl = document.getElementById('asset-status');
+      statusEl.textContent = 'Uploading to Cloudinary...';
+
+      try {
+        const url = `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`;
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('upload_preset', UPLOAD_PRESET);
+
+        const res = await fetch(url, {
+          method: 'POST',
+          body: formData
+        });
+
+        if (!res.ok) {
+          const txt = await res.text();
+          throw new Error('Cloudinary error: ' + txt);
+        }
+
+        const data = await res.json();
+
+        // Now save the asset metadata in our DB
+        statusEl.textContent = 'Saving in database...';
+
+        const dbRes = await fetch('/.netlify/functions/assets', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            gameId,
+            label,
+            kind: 'image',
+            url: data.secure_url,
+            width: data.width,
+            height: data.height,
+            format: data.format,
+            metadata: {
+              public_id: data.public_id,
+              version: data.version,
+              resource_type: data.resource_type
+            }
+          })
+        });
+
+        if (!dbRes.ok) {
+          const txt = await dbRes.text();
+          throw new Error('DB error: ' + txt);
+        }
+
+        statusEl.textContent = 'Uploaded & saved.';
+        document.getElementById('asset-label').value = '';
+        fileInput.value = '';
+
+        // Refresh current game assets
+        await loadGame(gameId);
+      } catch (err) {
+        console.error(err);
+        statusEl.textContent = 'Upload failed: ' + err.message;
+      }
+    }
+
+    function openExport() {
+      const gameId = document.getElementById('game-id').value;
+      const code = document.getElementById('game-code').value.trim();
+      if (!gameId && !code) {
+        alert('Save a game first.');
+        return;
+      }
+      const url = code
+        ? '/.netlify/functions/export-config?code=' + encodeURIComponent(code)
+        : '/.netlify/functions/export-config?id=' + encodeURIComponent(gameId);
+      window.open(url, '_blank');
+    }
+
+    // Initial load
+    fetchGames();
+  </script>
+</body>
+</html>
