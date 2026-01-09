@@ -1,4 +1,3 @@
-
 // functions/assets.js
 const db = require('./db');
 
@@ -23,7 +22,7 @@ exports.handler = async (event) => {
 
     const { rows } = await db.query(
       `INSERT INTO game_assets
-       (game_id, kind, label, url, width, height, format, metadata)
+         (game_id, kind, label, url, width, height, format, metadata)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING *`,
       [
@@ -47,6 +46,7 @@ exports.handler = async (event) => {
     console.error('assets function error', err);
     return {
       statusCode: 500,
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ error: 'Server error', details: err.message })
     };
   }
