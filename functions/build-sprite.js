@@ -4,12 +4,13 @@ const sharp = require('sharp');
 const https = require('https');
 const cloudinary = require('cloudinary').v2;
 
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET
-});
+// Let the SDK read CLOUDINARY_URL from env
+// CLOUDINARY_URL should look like: cloudinary://API_KEY:API_SECRET@CLOUD_NAME
+cloudinary.config();
 
+/**
+ * Download a remote image into a Buffer
+ */
 function fetchBuffer(url) {
   return new Promise((resolve, reject) => {
     https
@@ -27,6 +28,9 @@ function fetchBuffer(url) {
   });
 }
 
+/**
+ * Upload the sprite buffer to Cloudinary as PNG
+ */
 function uploadSpriteToCloudinary(buffer, publicId) {
   return new Promise((resolve, reject) => {
     const uploadOptions = {
@@ -44,6 +48,7 @@ function uploadSpriteToCloudinary(buffer, publicId) {
         resolve(result);
       }
     );
+
     stream.end(buffer);
   });
 }
@@ -202,7 +207,7 @@ exports.handler = async (event) => {
     return {
       statusCode: 500,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: 'Server error', details: err.message })
+      body: JSON.stringify({ error: 'Server error', details: err.message || err })
     };
   }
 };
