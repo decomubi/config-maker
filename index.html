@@ -399,6 +399,31 @@
         }
       };
 
+      const copyPackJson = async () => {
+        if (!packJson) return;
+        try {
+          await navigator.clipboard.writeText(packJson);
+          showToast('Pack JSON copied', 'success');
+        } catch (err) {
+          console.error(err);
+          showToast('Failed to copy JSON', 'error');
+        }
+      };
+
+      const downloadPackJson = () => {
+        if (!packJson) return;
+        const blob = new Blob([packJson], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const code = formData.code || 'game';
+        a.download = `pack_${code}.json`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      };
+
       const activeGameClass = (id) =>
         selectedGameId === id
           ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30'
@@ -833,14 +858,32 @@
                       <h3 className="text-sm uppercase tracking-wider text-slate-400 font-bold">
                         📦 Build Asset Pack (JSON)
                       </h3>
-                      <button
-                        type="button"
-                        onClick={buildPack}
-                        disabled={!selectedGameId || selectedGameId === 'new'}
-                        className="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded text-xs font-medium disabled:opacity-40"
-                      >
-                        Build pack
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={buildPack}
+                          disabled={!selectedGameId || selectedGameId === 'new'}
+                          className="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded text-xs font-medium disabled:opacity-40"
+                        >
+                          Build pack
+                        </button>
+                        <button
+                          type="button"
+                          onClick={copyPackJson}
+                          disabled={!packJson}
+                          className="bg-slate-700 hover:bg-slate-600 text-slate-100 px-2 py-1 rounded text-[11px] disabled:opacity-40"
+                        >
+                          Copy
+                        </button>
+                        <button
+                          type="button"
+                          onClick={downloadPackJson}
+                          disabled={!packJson}
+                          className="bg-slate-700 hover:bg-slate-600 text-slate-100 px-2 py-1 rounded text-[11px] disabled:opacity-40"
+                        >
+                          Download
+                        </button>
+                      </div>
                     </div>
                     <textarea
                       value={packJson}
