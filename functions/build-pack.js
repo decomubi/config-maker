@@ -44,8 +44,12 @@ exports.handler = async (event) => {
         body: JSON.stringify({
           gameId: game.id,
           gameCode: game.code,
+          name: game.name,
+          description: game.description,
+          config: game.config,
+          builtAt: new Date().toISOString(),
           assets: []
-        })
+        }, null, 2)
       };
     }
 
@@ -55,14 +59,12 @@ exports.handler = async (event) => {
       const th = a.target_height || a.height;
 
       const meta = a.metadata || {};
-      const publicId = meta.public_id; // we stored this at upload time
+      const publicId = meta.public_id;
 
       let processedUrl = a.url;
       if (publicId && a.format && tw && th) {
-        // Derive cloud name from original URL
         const u = new URL(a.url);
-        // URL path: /<cloud_name>/image/upload/...
-        const parts = u.pathname.split('/');
+        const parts = u.pathname.split('/'); // ['', cloud, 'image', 'upload', ...]
         const cloudName = parts[1];
 
         processedUrl = `https://res.cloudinary.com/${cloudName}/image/upload/w_${tw},h_${th},c_fit/${publicId}.${a.format}`;
@@ -90,7 +92,10 @@ exports.handler = async (event) => {
     const payload = {
       gameId: game.id,
       gameCode: game.code,
+      name: game.name,
+      description: game.description,
       config: game.config,
+      builtAt: new Date().toISOString(),
       assets: processedAssets
     };
 
