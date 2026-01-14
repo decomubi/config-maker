@@ -29,7 +29,10 @@ exports.handler = async (event) => {
     const game = gameRes.rows[0];
 
     const assetRes = await db.query(
-      'SELECT * FROM game_assets WHERE game_id = $1 ORDER BY created_at',
+      `SELECT id, kind, label, url, width, height, format
+         FROM game_assets
+        WHERE game_id = $1
+        ORDER BY created_at`,
       [game.id]
     );
 
@@ -39,15 +42,7 @@ exports.handler = async (event) => {
       code: game.code,
       description: game.description,
       config: game.config,
-      assets: assetRes.rows.map((a) => ({
-        id: a.id,
-        kind: a.kind,
-        label: a.label,
-        url: a.url,
-        width: a.width,
-        height: a.height,
-        format: a.format
-      }))
+      assets: assetRes.rows
     };
 
     return {
