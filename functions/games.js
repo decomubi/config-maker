@@ -1,12 +1,11 @@
-// functions/game.js
+// functions/games.js
 const db = require('./db');
 
 exports.handler = async (event) => {
   try {
     const { httpMethod, queryStringParameters } = event;
 
-    // GET /game        -> list games
-    // GET /game?id=... -> single game + assets
+    // GET /games or /games?id=...
     if (httpMethod === 'GET') {
       const id = queryStringParameters && queryStringParameters.id;
 
@@ -20,7 +19,11 @@ exports.handler = async (event) => {
         }
 
         const assetRes = await db.query(
-          'SELECT * FROM game_assets WHERE game_id = $1 ORDER BY created_at',
+          `SELECT id, kind, label, url, width, height, format,
+                  target_width, target_height, metadata
+             FROM game_assets
+            WHERE game_id = $1
+            ORDER BY created_at`,
           [id]
         );
 
@@ -34,7 +37,6 @@ exports.handler = async (event) => {
         };
       }
 
-      // List all games
       const listRes = await db.query(
         'SELECT id, name, code, description, created_at, updated_at FROM games ORDER BY created_at DESC'
       );
@@ -45,22 +47,18 @@ exports.handler = async (event) => {
       };
     }
 
-    // POST /game  (create or update)
+    // POST /games -> create or update
     if (httpMethod === 'POST') {
       const body = JSON.parse(event.body || '{}');
       const { id, name, code, description, config } = body;
 
       if (!name || !code) {
-        return {
-          statusCode: 400,
-          body: 'name and code are required'
-        };
+        return { statusCode: 400, body: 'name and code are required' };
       }
 
       const cfg = config && typeof config === 'object' ? config : {};
 
       if (id) {
-        // Update
         const updRes = await db.query(
           `UPDATE games
              SET name = $1,
@@ -72,21 +70,18 @@ exports.handler = async (event) => {
            RETURNING *`,
           [name, code, description || null, cfg, id]
         );
-
         return {
           statusCode: 200,
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(updRes.rows[0])
         };
       } else {
-        // Create
         const insRes = await db.query(
           `INSERT INTO games (name, code, description, config)
            VALUES ($1, $2, $3, $4)
            RETURNING *`,
           [name, code, description || null, cfg]
         );
-
         return {
           statusCode: 201,
           headers: { 'Content-Type': 'application/json' },
@@ -95,7 +90,7 @@ exports.handler = async (event) => {
       }
     }
 
-    // DELETE /game?id=...
+    // DELETE /games?id=...
     if (httpMethod === 'DELETE') {
       const id = queryStringParameters && queryStringParameters.id;
       if (!id) {
@@ -103,14 +98,12 @@ exports.handler = async (event) => {
       }
 
       await db.query('DELETE FROM games WHERE id = $1', [id]);
-      // game_assets table should have ON DELETE CASCADE on game_id
-
       return { statusCode: 204, body: '' };
     }
 
     return { statusCode: 405, body: 'Method Not Allowed' };
   } catch (err) {
-    console.error('game function error', err);
+    console.error('games function error', err);
     return {
       statusCode: 500,
       headers: { 'Content-Type': 'application/json' },
