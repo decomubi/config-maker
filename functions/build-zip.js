@@ -1,13 +1,9 @@
 // functions/build-zip.js
 const JSZip = require('jszip');
 const https = require('https');
-
 const buildPack = require('./build-pack');
 const buildSprite = require('./build-sprite');
 
-/**
- * Download a remote file to a Buffer
- */
 function fetchBuffer(url) {
   return new Promise((resolve, reject) => {
     https
@@ -41,24 +37,18 @@ exports.handler = async (event) => {
 
     const qs = code ? { code } : { id };
 
-    // 1. Call build-pack internally
     const packRes = await buildPack.handler({
       httpMethod: 'GET',
       queryStringParameters: qs
     });
-    if (packRes.statusCode !== 200) {
-      return packRes; // bubble error
-    }
+    if (packRes.statusCode !== 200) return packRes;
     const packData = JSON.parse(packRes.body);
 
-    // 2. Call build-sprite internally
     const spriteRes = await buildSprite.handler({
       httpMethod: 'GET',
       queryStringParameters: qs
     });
-    if (spriteRes.statusCode !== 200) {
-      return spriteRes; // bubble error
-    }
+    if (spriteRes.statusCode !== 200) return spriteRes;
     const spriteData = JSON.parse(spriteRes.body);
 
     const gameCode =
@@ -66,26 +56,15 @@ exports.handler = async (event) => {
 
     const zip = new JSZip();
 
-    // 3. Add JSON files to ZIP
-    zip.file(
-      `pack_${gameCode}.json`,
-      JSON.stringify(packData, null, 2)
-    );
-    zip.file(
-      `sprite_${gameCode}.json`,
-      JSON.stringify(spriteData, null, 2)
-    );
+    zip.file(`pack_${gameCode}.json`, JSON.stringify(packData, null, 2));
+    zip.file(`sprite_${gameCode}.json`, JSON.stringify(spriteData, null, 2));
 
-    // 4. Add sprite PNG to ZIP
-    const spriteUrl =
-      spriteData.sprite && spriteData.sprite.url;
-    if (!spriteUrl) {
-      throw new Error('Sprite URL missing in sprite data');
-    }
+    const spriteUrl = spriteData.sprite && spriteData.sprite.url;
+    if (!spriteUrl) throw new Error('Sprite URL missing in sprite data');
+
     const pngBuffer = await fetchBuffer(spriteUrl);
     zip.file(`sprite_${gameCode}.png`, pngBuffer);
 
-    // 5. Generate ZIP buffer
     const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' });
 
     return {
@@ -102,10 +81,7 @@ exports.handler = async (event) => {
     return {
       statusCode: 500,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        error: 'Server error',
-        details: err.message || err
-      })
+      body: JSON.stringify({ error: 'Server error', details: err.message || err })
     };
   }
 };
