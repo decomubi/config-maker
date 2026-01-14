@@ -3,8 +3,9 @@ const db = require('./db');
 
 exports.handler = async (event) => {
   try {
-    const { httpMethod } = event;
+    const { httpMethod, queryStringParameters } = event;
 
+    // CREATE asset (upload metadata)
     if (httpMethod === 'POST') {
       const body = JSON.parse(event.body || '{}');
       const { gameId, label, kind, url, width, height, format, metadata } = body;
@@ -43,7 +44,7 @@ exports.handler = async (event) => {
       };
     }
 
-    // NEW: update target_width / target_height for an existing asset
+    // UPDATE target sizes
     if (httpMethod === 'PUT') {
       const body = JSON.parse(event.body || '{}');
       const { id, targetWidth, targetHeight } = body;
@@ -77,6 +78,18 @@ exports.handler = async (event) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(rows[0])
       };
+    }
+
+    // DELETE asset (remove from DB, keep Cloudinary file as source)
+    if (httpMethod === 'DELETE') {
+      const id = queryStringParameters && queryStringParameters.id;
+      if (!id) {
+        return { statusCode: 400, body: 'id is required' };
+      }
+
+      await db.query('DELETE FROM game_assets WHERE id = $1', [id]);
+
+      return { statusCode: 204, body: '' };
     }
 
     return { statusCode: 405, body: 'Method Not Allowed' };
