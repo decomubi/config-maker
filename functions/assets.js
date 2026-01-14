@@ -5,7 +5,7 @@ exports.handler = async (event) => {
   try {
     const { httpMethod, queryStringParameters } = event;
 
-    // CREATE asset (upload metadata)
+    // CREATE asset
     if (httpMethod === 'POST') {
       const body = JSON.parse(event.body || '{}');
       const { gameId, label, kind, url, width, height, format, metadata } = body;
@@ -80,7 +80,7 @@ exports.handler = async (event) => {
       };
     }
 
-    // DELETE asset (remove from DB, keep Cloudinary file as source)
+    // DELETE asset
     if (httpMethod === 'DELETE') {
       const id = queryStringParameters && queryStringParameters.id;
       if (!id) {
