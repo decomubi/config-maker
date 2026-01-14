@@ -55,11 +55,12 @@
     const CLOUD_NAME = 'dqhsuzpv0';
     const UPLOAD_PRESET = 'casino_game_assets';
 
-    // Your backend file is games.js, so use /games here:
+    // Backend functions (games.js, assets.js, export-config.js, build-pack.js, build-sprite.js)
     const API_GAME = '/.netlify/functions/games';
     const API_ASSETS = '/.netlify/functions/assets';
     const API_EXPORT = '/.netlify/functions/export-config';
     const API_BUILD_PACK = '/.netlify/functions/build-pack';
+    const API_BUILD_SPRITE = '/.netlify/functions/build-sprite';
 
     const Toast = ({ message, type, onClose }) => {
       if (!message) return null;
@@ -108,6 +109,9 @@
 
       // Pack JSON output
       const [packJson, setPackJson] = useState('');
+
+      // Sprite JSON output
+      const [spriteJson, setSpriteJson] = useState('');
 
       useEffect(() => {
         fetchGames();
@@ -159,6 +163,7 @@
           });
           setTargetEdits(edits);
           setPackJson('');
+          setSpriteJson('');
         } catch (err) {
           console.error(err);
           showToast('Failed to load game', 'error');
@@ -177,6 +182,7 @@
         setAssets([]);
         setTargetEdits({});
         setPackJson('');
+        setSpriteJson('');
       };
 
       const syncConfigPreview = (obj) => {
@@ -406,7 +412,7 @@
           showToast('Pack JSON copied', 'success');
         } catch (err) {
           console.error(err);
-          showToast('Failed to copy JSON', 'error');
+          showToast('Failed to copy pack JSON', 'error');
         }
       };
 
@@ -415,9 +421,55 @@
         const blob = new Blob([packJson], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
-        a.href = url;
         const code = formData.code || 'game';
+        a.href = url;
         a.download = `pack_${code}.json`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      };
+
+      const buildSprite = async () => {
+        if (!selectedGameId && !formData.code) {
+          showToast('Save the game first', 'error');
+          return;
+        }
+        try {
+          const param = formData.code
+            ? 'code=' + encodeURIComponent(formData.code)
+            : 'id=' + encodeURIComponent(selectedGameId);
+
+          const res = await fetch(API_BUILD_SPRITE + '?' + param);
+          if (!res.ok) throw new Error(await res.text());
+          const data = await res.json();
+          setSpriteJson(JSON.stringify(data, null, 2));
+          showToast('Sprite sheet built', 'success');
+        } catch (err) {
+          console.error(err);
+          showToast('Build sprite failed: ' + err.message, 'error');
+        }
+      };
+
+      const copySpriteJson = async () => {
+        if (!spriteJson) return;
+        try {
+          await navigator.clipboard.writeText(spriteJson);
+          showToast('Sprite JSON copied', 'success');
+        } catch (err) {
+          console.error(err);
+          showToast('Failed to copy sprite JSON', 'error');
+        }
+      };
+
+      const downloadSpriteJson = () => {
+        if (!spriteJson) return;
+        const blob = new Blob([spriteJson], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        const code = formData.code || 'game';
+        a.href = url;
+        a.download = `sprite_${code}.json`;
         document.body.appendChild(a);
         a.click();
         a.remove();
@@ -891,6 +943,73 @@
                       spellCheck="false"
                       className="w-full h-40 bg-slate-900 border border-slate-700 rounded-lg p-3 font-mono text-[11px] text-slate-300 resize-none"
                       placeholder="Click 'Build pack' to generate JSON with processed URLs."
+                    ></textarea>
+                  </div>
+
+                  {/* Build sprite JSON */}
+                  <div className="mt-8">
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="text-sm uppercase tracking-wider text-slate-400 font-bold">
+                        🧩 Build Sprite Sheet (PNG + Frames JSON)
+                      </h3>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={buildSprite}
+                          disabled={!selectedGameId || selectedGameId === 'new'}
+                          className="bg-purple-600 hover:bg-purple-500 text-white px-3 py-1.5 rounded text-xs font-medium disabled:opacity-40"
+                        >
+                          Build sprite
+                        </button>
+                        <button
+                          type="button"
+                          onClick={copySpriteJson}
+                          disabled={!spriteJson}
+                          className="bg-slate-700 hover:bg-slate-600 text-slate-100 px-2 py-1 rounded text-[11px] disabled:opacity-40"
+                        >
+                          Copy
+                        </button>
+                        <button
+                          type="button"
+                          onClick={downloadSpriteJson}
+                          disabled={!spriteJson}
+                          className="bg-slate-700 hover:bg-slate-600 text-slate-100 px-2 py-1 rounded text-[11px] disabled:opacity-40"
+                        >
+                          Download
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Sprite JSON + link */}
+                    {spriteJson && (
+                      <div className="mb-2 text-xs text-slate-400">
+                        {/* Quick link to sheet URL */}
+                        {(() => {
+                          try {
+                            const data = JSON.parse(spriteJson);
+                            if (data.sprite && data.sprite.url) {
+                              return (
+                                <a
+                                  href={data.sprite.url}
+                                  target="_blank"
+                                  className="text-indigo-400 hover:text-indigo-300"
+                                >
+                                  Open sprite sheet image
+                                </a>
+                              );
+                            }
+                          } catch (e) {}
+                          return null;
+                        })()}
+                      </div>
+                    )}
+
+                    <textarea
+                      value={spriteJson}
+                      readOnly
+                      spellCheck="false"
+                      className="w-full h-40 bg-slate-900 border border-slate-700 rounded-lg p-3 font-mono text-[11px] text-slate-300 resize-none"
+                      placeholder="Click 'Build sprite' to generate the sprite PNG and frames JSON."
                     ></textarea>
                   </div>
                 </section>
