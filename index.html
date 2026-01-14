@@ -53,7 +53,8 @@
 
     // === CONFIG ===
     const CLOUD_NAME = 'dqhsuzpv0';
-    const UPLOAD_PRESET = 'casino_game_assets';
+    const IMAGE_UPLOAD_PRESET = 'casino_game_assets';
+    const VIDEO_UPLOAD_PRESET = 'casino_game_videos'; // create this unsigned preset in Cloudinary
 
     // Backend functions
     const API_GAME = '/.netlify/functions/games';
@@ -95,14 +96,18 @@
       const [configObj, setConfigObj] = useState({});
       const [assets, setAssets] = useState([]);
 
+      // Parameter builder
       const [paramKey, setParamKey] = useState('');
       const [paramValue, setParamValue] = useState('');
       const [paramType, setParamType] = useState('string');
 
+      // Upload
       const [uploadLabel, setUploadLabel] = useState('');
       const [uploadFile, setUploadFile] = useState(null);
       const [isUploading, setIsUploading] = useState(false);
+      const [uploadKind, setUploadKind] = useState('image'); // 'image' | 'video'
 
+      // Target edits per asset: { [assetId]: { w, h } }
       const [targetEdits, setTargetEdits] = useState({});
 
       const [packJson, setPackJson] = useState('');
@@ -261,7 +266,6 @@
       const handleDeleteGame = async (idToDelete) => {
         if (!idToDelete) return;
         if (!window.confirm('Delete this game? This cannot be undone.')) return;
-
         setIsDeleting(true);
         try {
           const res = await fetch(API_GAME + '?id=' + encodeURIComponent(idToDelete), {
@@ -293,10 +297,14 @@
 
         setIsUploading(true);
         try {
-          const url = `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`;
+          const resourceType = uploadKind === 'video' ? 'video' : 'image';
+          const preset =
+            uploadKind === 'video' ? VIDEO_UPLOAD_PRESET : IMAGE_UPLOAD_PRESET;
+
+          const url = `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/${resourceType}/upload`;
           const fd = new FormData();
           fd.append('file', uploadFile);
-          fd.append('upload_preset', UPLOAD_PRESET);
+          fd.append('upload_preset', preset);
 
           const cRes = await fetch(url, { method: 'POST', body: fd });
           if (!cRes.ok) throw new Error('Cloudinary upload failed');
@@ -308,7 +316,7 @@
             body: JSON.stringify({
               gameId: selectedGameId,
               label: uploadLabel,
-              kind: 'image',
+              kind: uploadKind,
               url: cData.secure_url,
               width: cData.width,
               height: cData.height,
@@ -808,6 +816,7 @@
                     🖼 Asset Management
                   </h3>
 
+                  {/* Upload row */}
                   <div className="bg-slate-900/50 rounded-xl border border-dashed border-slate-600 p-6 mb-6 flex items-end gap-4">
                     <div className="flex-1">
                       <label className="text-xs text-slate-400 block mb-1">
@@ -820,6 +829,7 @@
                         placeholder="e.g. wheel-bg"
                       />
                     </div>
+
                     <div className="flex-[2]">
                       <label className="text-xs text-slate-400 block mb-1">
                         Source File
@@ -827,11 +837,40 @@
                       <input
                         id="file-input"
                         type="file"
-                        accept="image/*"
+                        accept={uploadKind === 'video' ? 'video/*' : 'image/*'}
                         onChange={(e) => setUploadFile(e.target.files[0])}
                         className="w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-slate-700 file:text-slate-200 hover:file:bg-slate-600 cursor-pointer"
                       />
                     </div>
+
+                    <div className="flex-1">
+                      <label className="text-xs text-slate-400 block mb-1">
+                        Asset Type
+                      </label>
+                      <div className="flex gap-3 text-xs text-slate-200 mt-1">
+                        <label className="inline-flex items-center gap-1">
+                          <input
+                            type="radio"
+                            name="assetKind"
+                            value="image"
+                            checked={uploadKind === 'image'}
+                            onChange={() => setUploadKind('image')}
+                          />
+                          <span>Image</span>
+                        </label>
+                        <label className="inline-flex items-center gap-1">
+                          <input
+                            type="radio"
+                            name="assetKind"
+                            value="video"
+                            checked={uploadKind === 'video'}
+                            onChange={() => setUploadKind('video')}
+                          />
+                          <span>Video</span>
+                        </label>
+                      </div>
+                    </div>
+
                     <button
                       onClick={handleUpload}
                       disabled={
@@ -843,6 +882,7 @@
                     </button>
                   </div>
 
+                  {/* Assets grid */}
                   {assets.length === 0 ? (
                     <div className="text-center py-8 text-slate-500 text-sm italic">
                       No assets attached to this game yet.
@@ -855,11 +895,21 @@
                           className="group bg-slate-900 rounded-lg border border-slate-700 overflow-hidden hover:border-indigo-500 transition-colors"
                         >
                           <div className="aspect-square flex items-center justify-center p-2 bg-slate-800">
-                            <img
-                              src={a.url}
-                              alt={a.label}
-                              className="max-w-full max-h-full object-contain drop-shadow-lg"
-                            />
+                            {a.kind === 'video' ? (
+                              <video
+                                src={a.url}
+                                className="max-w-full max-h-full"
+                                muted
+                                loop
+                                autoPlay
+                              />
+                            ) : (
+                              <img
+                                src={a.url}
+                                alt={a.label}
+                                className="max-w-full max-h-full object-contain drop-shadow-lg"
+                              />
+                            )}
                           </div>
                           <div className="p-3 bg-slate-850">
                             <div
@@ -872,7 +922,9 @@
                               <span>
                                 Orig: {a.width}x{a.height}
                               </span>
-                              <span className="uppercase">{a.format}</span>
+                              <span className="uppercase">
+                                {(a.kind || 'image').toUpperCase()} · {a.format}
+                              </span>
                             </div>
 
                             {/* Target size + buttons */}
@@ -977,7 +1029,7 @@
                       readOnly
                       spellCheck="false"
                       className="w-full h-40 bg-slate-900 border border-slate-700 rounded-lg p-3 font-mono text-[11px] text-slate-300 resize-none"
-                      placeholder="Click 'Build pack' to generate JSON with processed URLs."
+                      placeholder="Click 'Build pack' to generate JSON with processed URLs (images + videos)."
                     ></textarea>
                   </div>
 
@@ -1050,7 +1102,7 @@
                       readOnly
                       spellCheck="false"
                       className="w-full h-40 bg-slate-900 border border-slate-700 rounded-lg p-3 font-mono text-[11px] text-slate-300 resize-none"
-                      placeholder="Click 'Build sprite' to generate the sprite PNG and frames JSON."
+                      placeholder="Click 'Build sprite' to generate the sprite PNG and frames JSON (images only)."
                     ></textarea>
                   </div>
                 </section>
