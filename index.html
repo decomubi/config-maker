@@ -56,7 +56,7 @@
     const UPLOAD_PRESET = 'casino_game_assets';
 
     // Backend functions
-    const API_GAME = '/.netlify/functions/games';      // games.js
+    const API_GAME = '/.netlify/functions/games';
     const API_ASSETS = '/.netlify/functions/assets';
     const API_EXPORT = '/.netlify/functions/export-config';
     const API_BUILD_PACK = '/.netlify/functions/build-pack';
@@ -95,23 +95,17 @@
       const [configObj, setConfigObj] = useState({});
       const [assets, setAssets] = useState([]);
 
-      // Parameter builder
       const [paramKey, setParamKey] = useState('');
       const [paramValue, setParamValue] = useState('');
       const [paramType, setParamType] = useState('string');
 
-      // Upload
       const [uploadLabel, setUploadLabel] = useState('');
       const [uploadFile, setUploadFile] = useState(null);
       const [isUploading, setIsUploading] = useState(false);
 
-      // Target edits per asset: { [assetId]: { w, h } }
       const [targetEdits, setTargetEdits] = useState({});
 
-      // Pack JSON output
       const [packJson, setPackJson] = useState('');
-
-      // Sprite JSON output
       const [spriteJson, setSpriteJson] = useState('');
 
       useEffect(() => {
@@ -376,6 +370,30 @@
         }
       };
 
+      const deleteAsset = async (assetId) => {
+        if (!assetId) return;
+        if (!window.confirm('Delete this asset from the game?')) return;
+        try {
+          const res = await fetch(
+            API_ASSETS + '?id=' + encodeURIComponent(assetId),
+            { method: 'DELETE' }
+          );
+          if (!res.ok && res.status !== 204) {
+            throw new Error(await res.text());
+          }
+          setAssets(prev => prev.filter(a => a.id !== assetId));
+          setTargetEdits(prev => {
+            const copy = { ...prev };
+            delete copy[assetId];
+            return copy;
+          });
+          showToast('Asset deleted from game', 'success');
+        } catch (err) {
+          console.error(err);
+          showToast('Failed to delete asset: ' + err.message, 'error');
+        }
+      };
+
       const openExport = () => {
         if (!selectedGameId && !formData.code) return;
         const param = formData.code
@@ -389,12 +407,10 @@
           showToast('Save the game first', 'error');
           return;
         }
-
         try {
           const param = formData.code
             ? 'code=' + encodeURIComponent(formData.code)
             : 'id=' + encodeURIComponent(selectedGameId);
-
           const res = await fetch(API_BUILD_PACK + '?' + param);
           if (!res.ok) throw new Error(await res.text());
           const data = await res.json();
@@ -677,7 +693,6 @@
                     🧠 Game Logic (Parameters)
                   </h3>
 
-                  {/* Param editor */}
                   <div className="grid grid-cols-3 gap-4 mb-4">
                     <div>
                       <label className="text-xs text-slate-400 block mb-1">
@@ -726,7 +741,6 @@
                     </div>
                   </div>
 
-                  {/* Param list */}
                   {Object.keys(configObj).length === 0 ? (
                     <div className="text-xs text-slate-500 italic mb-4">
                       No parameters yet. Use the form above to add some.
@@ -770,7 +784,6 @@
                     </div>
                   )}
 
-                  {/* JSON preview */}
                   <div>
                     <div className="flex justify-between items-center mb-1">
                       <span className="text-xs uppercase tracking-wider text-slate-500 font-semibold">
@@ -795,7 +808,6 @@
                     🖼 Asset Management
                   </h3>
 
-                  {/* Upload */}
                   <div className="bg-slate-900/50 rounded-xl border border-dashed border-slate-600 p-6 mb-6 flex items-end gap-4">
                     <div className="flex-1">
                       <label className="text-xs text-slate-400 block mb-1">
@@ -831,7 +843,6 @@
                     </button>
                   </div>
 
-                  {/* Asset grid */}
                   {assets.length === 0 ? (
                     <div className="text-center py-8 text-slate-500 text-sm italic">
                       No assets attached to this game yet.
@@ -864,49 +875,61 @@
                               <span className="uppercase">{a.format}</span>
                             </div>
 
-                            {/* Target size */}
-                            <div className="mt-2 flex items-center gap-2 text-xs text-slate-400">
-                              <span className="text-[10px] uppercase tracking-wide">
-                                Target
-                              </span>
-                              <input
-                                type="number"
-                                placeholder="W"
-                                value={(targetEdits[a.id] && targetEdits[a.id].w) || ''}
-                                onChange={(e) =>
-                                  setTargetEdits(prev => ({
-                                    ...prev,
-                                    [a.id]: { ...(prev[a.id] || {}), w: e.target.value }
-                                  }))
-                                }
-                                className="w-14 bg-slate-900 border border-slate-700 rounded px-1 py-0.5 text-[11px] focus:border-indigo-500 outline-none"
-                              />
-                              <span>x</span>
-                              <input
-                                type="number"
-                                placeholder="H"
-                                value={(targetEdits[a.id] && targetEdits[a.id].h) || ''}
-                                onChange={(e) =>
-                                  setTargetEdits(prev => ({
-                                    ...prev,
-                                    [a.id]: { ...(prev[a.id] || {}), h: e.target.value }
-                                  }))
-                                }
-                                className="w-14 bg-slate-900 border border-slate-700 rounded px-1 py-0.5 text-[11px] focus:border-indigo-500 outline-none"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => updateAssetTarget(a.id)}
-                                className="ml-auto bg-slate-700 hover:bg-indigo-600 text-[11px] px-2 py-1 rounded"
-                              >
-                                Save
-                              </button>
+                            {/* Target size + buttons */}
+                            <div className="mt-3 text-xs text-slate-400">
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] uppercase tracking-wide">
+                                  Target
+                                </span>
+                                <input
+                                  type="number"
+                                  placeholder="W"
+                                  value={(targetEdits[a.id] && targetEdits[a.id].w) || ''}
+                                  onChange={(e) =>
+                                    setTargetEdits(prev => ({
+                                      ...prev,
+                                      [a.id]: { ...(prev[a.id] || {}), w: e.target.value }
+                                    }))
+                                  }
+                                  className="w-16 bg-slate-900 border border-slate-700 rounded px-1 py-0.5 text-[11px] focus:border-indigo-500 outline-none"
+                                />
+                                <span>x</span>
+                                <input
+                                  type="number"
+                                  placeholder="H"
+                                  value={(targetEdits[a.id] && targetEdits[a.id].h) || ''}
+                                  onChange={(e) =>
+                                    setTargetEdits(prev => ({
+                                      ...prev,
+                                      [a.id]: { ...(prev[a.id] || {}), h: e.target.value }
+                                    }))
+                                  }
+                                  className="w-16 bg-slate-900 border border-slate-700 rounded px-1 py-0.5 text-[11px] focus:border-indigo-500 outline-none"
+                                />
+                              </div>
+
+                              <div className="mt-2 flex items-center justify-between gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => updateAssetTarget(a.id)}
+                                  className="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1 rounded text-[11px] font-medium"
+                                >
+                                  Save size
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => deleteAsset(a.id)}
+                                  className="bg-red-600/80 hover:bg-red-500 text-white px-3 py-1 rounded text-[11px] font-medium"
+                                >
+                                  Delete
+                                </button>
+                              </div>
                             </div>
 
                             <a
                               href={a.url}
                               target="_blank"
-                              className="mt-2 inline-block text-xs text-indigo-400 hover:text-indigo-300"
+                              className="mt-3 inline-block text-xs text-indigo-400 hover:text-indigo-300"
                             >
                               Open original
                             </a>
@@ -916,7 +939,7 @@
                     </div>
                   )}
 
-                  {/* Build pack JSON */}
+                  {/* PACK JSON */}
                   <div className="mt-8">
                     <div className="flex items-center justify-between mb-2">
                       <h3 className="text-sm uppercase tracking-wider text-slate-400 font-bold">
@@ -958,7 +981,7 @@
                     ></textarea>
                   </div>
 
-                  {/* Build sprite JSON */}
+                  {/* SPRITE JSON + ZIP */}
                   <div className="mt-8">
                     <div className="flex items-center justify-between mb-2">
                       <h3 className="text-sm uppercase tracking-wider text-slate-400 font-bold">
