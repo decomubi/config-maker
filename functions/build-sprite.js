@@ -4,13 +4,9 @@ const sharp = require('sharp');
 const https = require('https');
 const cloudinary = require('cloudinary').v2;
 
-// Let the SDK read CLOUDINARY_URL from env
-// CLOUDINARY_URL should look like: cloudinary://API_KEY:API_SECRET@CLOUD_NAME
+// Uses process.env.CLOUDINARY_URL
 cloudinary.config();
 
-/**
- * Download a remote image into a Buffer
- */
 function fetchBuffer(url) {
   return new Promise((resolve, reject) => {
     https
@@ -28,9 +24,6 @@ function fetchBuffer(url) {
   });
 }
 
-/**
- * Upload the sprite buffer to Cloudinary as PNG
- */
 function uploadSpriteToCloudinary(buffer, publicId) {
   return new Promise((resolve, reject) => {
     const uploadOptions = {
@@ -67,7 +60,6 @@ exports.handler = async (event) => {
       return { statusCode: 400, body: 'Provide id or code' };
     }
 
-    // 1. Load game
     let gameRes;
     if (id) {
       gameRes = await db.query('SELECT * FROM games WHERE id = $1', [id]);
@@ -79,24 +71,24 @@ exports.handler = async (event) => {
     }
     const game = gameRes.rows[0];
 
-    // 2. Load assets
     const assetRes = await db.query(
-      `SELECT id, label, url, width, height, format, target_width, target_height, metadata
+      `SELECT id, kind, label, url, width, height, format, target_width, target_height, metadata
          FROM game_assets
         WHERE game_id = $1
         ORDER BY created_at`,
       [game.id]
     );
-    const assets = assetRes.rows;
+
+    const allAssets = assetRes.rows;
+    const assets = allAssets.filter(a => (a.kind || 'image') === 'image');
 
     if (assets.length === 0) {
       return {
         statusCode: 400,
-        body: 'No assets for this game'
+        body: 'No image assets for this game to build a sprite'
       };
     }
 
-    // 3. Prepare tiles with target sizes and processed URLs
     const tiles = assets.map((a) => {
       const tw = a.target_width || a.width;
       const th = a.target_height || a.height;
@@ -107,7 +99,7 @@ exports.handler = async (event) => {
       }
 
       const u = new URL(a.url);
-      const parts = u.pathname.split('/'); // ['', cloud, 'image', 'upload', ...]
+      const parts = u.pathname.split('/');
       const cloudName = parts[1];
 
       const processedUrl = `https://res.cloudinary.com/${cloudName}/image/upload/w_${tw},h_${th},c_fit/${publicId}.${a.format}`;
@@ -121,7 +113,6 @@ exports.handler = async (event) => {
       };
     });
 
-    // 4. Determine grid layout (simple near-square grid)
     const maxW = Math.max(...tiles.map((t) => t.width));
     const maxH = Math.max(...tiles.map((t) => t.height));
     const cellWidth = maxW;
@@ -134,12 +125,10 @@ exports.handler = async (event) => {
     const sheetWidth = columns * cellWidth;
     const sheetHeight = rows * cellHeight;
 
-    // 5. Download all tile images in parallel
     const buffers = await Promise.all(
       tiles.map((t) => fetchBuffer(t.processedUrl))
     );
 
-    // 6. Prepare composites and frames mapping
     const composites = [];
     const frames = {};
 
@@ -163,7 +152,6 @@ exports.handler = async (event) => {
       };
     });
 
-    // 7. Compose sprite sheet with sharp
     const base = sharp({
       create: {
         width: sheetWidth,
@@ -175,7 +163,6 @@ exports.handler = async (event) => {
 
     const sheetBuffer = await base.composite(composites).png().toBuffer();
 
-    // 8. Upload sprite PNG to Cloudinary
     const publicId = `sprite_${game.code}`;
     const uploadResult = await uploadSpriteToCloudinary(sheetBuffer, publicId);
 
